@@ -1,0 +1,219 @@
+diff --git a/adb/Makefile b/adb/Makefile
+index 957415e..4c71101 100644
+--- a/adb/Makefile
++++ b/adb/Makefile
+@@ -37,7 +37,7 @@ LOCAL_STATIC_LIBRARIES := libcutils libc
+ ################################
+ 
+ OBJS = $(LOCAL_SRC_FILES:.c=.o)
+-CFLAGS = -marm $(LOCAL_CFLAGS) -I../include -I. -DHAVE_PTHREADS=1
++CFLAGS = $(LOCAL_CFLAGS) -I../include -I. -DHAVE_PTHREADS=1
+ 
+ %.o: %.c
+ 	gcc -g -c -fPIC $(CFLAGS) $(LFLAGS) $< -o $@
+diff --git a/adb/adb.c b/adb/adb.c
+index e35c334..9c60956 100644
+--- a/adb/adb.c
++++ b/adb/adb.c
+@@ -887,49 +887,51 @@ int adb_main(int is_daemon, int server_port)
+             }
+         }
+     }
++     //secure = 1;
+ 
+     /* don't listen on a port (default 5037) if running in secure mode */
+     /* don't run as root if we are running in secure mode */
+     if (secure) {
+-        struct __user_cap_header_struct header;
+-        struct __user_cap_data_struct cap;
+-
+-        if (prctl(PR_SET_KEEPCAPS, 1, 0, 0, 0) != 0) {
+-            exit(1);
+-        }
+-
+-        /* add extra groups:
+-        ** AID_ADB to access the USB driver
+-        ** AID_LOG to read system logs (adb logcat)
+-        ** AID_INPUT to diagnose input issues (getevent)
+-        ** AID_INET to diagnose network issues (netcfg, ping)
+-        ** AID_GRAPHICS to access the frame buffer
+-        ** AID_NET_BT and AID_NET_BT_ADMIN to diagnose bluetooth (hcidump)
+-        ** AID_SDCARD_RW to allow writing to the SD card
+-        ** AID_MOUNT to allow unmounting the SD card before rebooting
+-        ** AID_NET_BW_STATS to read out qtaguid statistics
+-        */
+-        gid_t groups[] = { AID_ADB, AID_LOG, AID_INPUT, AID_INET, AID_GRAPHICS,
+-                           AID_NET_BT, AID_NET_BT_ADMIN, AID_SDCARD_RW, AID_MOUNT,
+-                           AID_NET_BW_STATS };
+-        if (setgroups(sizeof(groups)/sizeof(groups[0]), groups) != 0) {
+-            exit(1);
+-        }
+-
+-        /* then switch user and group to "shell" */
+-        if (setgid(AID_SHELL) != 0) {
+-            exit(1);
+-        }
+-        if (setuid(AID_SHELL) != 0) {
+-            exit(1);
+-        }
+-
+-        /* set CAP_SYS_BOOT capability, so "adb reboot" will succeed */
+-        header.version = _LINUX_CAPABILITY_VERSION;
+-        header.pid = 0;
+-        cap.effective = cap.permitted = (1 << CAP_SYS_BOOT);
+-        cap.inheritable = 0;
+-        capset(&header, &cap);
++        // struct __user_cap_header_struct header;
++        // struct __user_cap_data_struct cap;
++
++        // if (prctl(PR_SET_KEEPCAPS, 1, 0, 0, 0) != 0) {
++        //     exit(1);
++        // }
++
++        // /* add extra groups:
++        // ** AID_ADB to access the USB driver
++        // ** AID_LOG to read system logs (adb logcat)
++        // ** AID_INPUT to diagnose input issues (getevent)
++        // ** AID_INET to diagnose network issues (netcfg, ping)
++        // ** AID_GRAPHICS to access the frame buffer
++        // ** AID_NET_BT and AID_NET_BT_ADMIN to diagnose bluetooth (hcidump)
++        // ** AID_SDCARD_RW to allow writing to the SD card
++        // ** AID_MOUNT to allow unmounting the SD card before rebooting
++        // ** AID_NET_BW_STATS to read out qtaguid statistics
++        // */
++        
++        // gid_t groups[] = { AID_ADB, AID_LOG, AID_INPUT, AID_INET, AID_GRAPHICS,
++        //                    AID_NET_BT, AID_NET_BT_ADMIN, AID_SDCARD_RW, AID_MOUNT,
++        //                    AID_NET_BW_STATS };
++        // if (setgroups(sizeof(groups)/sizeof(groups[0]), groups) != 0) {
++        //     exit(1);
++        // }
++
++        // /* then switch user and group to "shell" */
++        // if (setgid(AID_SHELL) != 0) {
++        //     exit(1);
++        // }
++        // if (setuid(AID_SHELL) != 0) {
++        //     exit(1);
++        // }
++
++        // /* set CAP_SYS_BOOT capability, so "adb reboot" will succeed */
++        // header.version = _LINUX_CAPABILITY_VERSION;
++        // header.pid = 0;
++        // cap.effective = cap.permitted = (1 << CAP_SYS_BOOT);
++        // cap.inheritable = 0;
++        // capset(&header, &cap);
+ 
+         D("Local port disabled\n");
+     } else {
+diff --git a/adb/file_sync_service.c b/adb/file_sync_service.c
+index d3e841b..6ccd878 100644
+--- a/adb/file_sync_service.c
++++ b/adb/file_sync_service.c
+@@ -320,7 +320,6 @@ static int do_recv(int s, const char *path, char *buffer)
+ {
+     syncmsg msg;
+     int fd, r;
+-
+     fd = adb_open(path, O_RDONLY);
+     if(fd < 0) {
+         if(fail_errno(s)) return -1;
+diff --git a/adb/services.c b/adb/services.c
+index 41b4a51..abc6f57 100644
+--- a/adb/services.c
++++ b/adb/services.c
+@@ -429,67 +429,22 @@ int service_to_fd(const char *name)
+             return -1;
+ #endif
+         }
+-#ifndef HAVE_WINSOCK   /* winsock doesn't implement unix domain sockets */
+-    } else if(!strncmp(name, "local:", 6)) {
+-        ret = socket_local_client(name + 6,
+-                ANDROID_SOCKET_NAMESPACE_RESERVED, SOCK_STREAM);
+-    } else if(!strncmp(name, "localreserved:", 14)) {
+-        ret = socket_local_client(name + 14,
+-                ANDROID_SOCKET_NAMESPACE_RESERVED, SOCK_STREAM);
+-    } else if(!strncmp(name, "localabstract:", 14)) {
+-        ret = socket_local_client(name + 14,
+-                ANDROID_SOCKET_NAMESPACE_ABSTRACT, SOCK_STREAM);
+-    } else if(!strncmp(name, "localfilesystem:", 16)) {
+-        ret = socket_local_client(name + 16,
+-                ANDROID_SOCKET_NAMESPACE_FILESYSTEM, SOCK_STREAM);
+-#endif
+-#if ADB_HOST
+-    } else if(!strncmp("dns:", name, 4)){
+-        char *n = strdup(name + 4);
+-        if(n == 0) return -1;
+-        ret = create_service_thread(dns_service, n);
+-#else /* !ADB_HOST */
+-    } else if(!strncmp("dev:", name, 4)) {
+-        ret = unix_open(name + 4, O_RDWR);
+-    } else if(!strncmp(name, "framebuffer:", 12)) {
+-        ret = create_service_thread(framebuffer_service, 0);
+-    } else if(recovery_mode && !strncmp(name, "recover:", 8)) {
+-        ret = create_service_thread(recover_service, (void*) atoi(name + 8));
+-    } else if (!strncmp(name, "jdwp:", 5)) {
+-        ret = create_jdwp_connection_fd(atoi(name+5));
+-    } else if (!strncmp(name, "log:", 4)) {
+-        ret = create_service_thread(log_service, get_log_file_path(name + 4));
+-    } else if(!HOST && !strncmp(name, "shell:", 6)) {
+-        if(name[6]) {
+-            ret = create_subproc_thread(name + 6);
+-        } else {
+-            ret = create_subproc_thread(0);
+-        }
++// #ifndef HAVE_WINSOCK   /* winsock doesn't implement unix domain sockets */
++//     } else if(!strncmp(name, "local:", 6)) {
++//         ret = socket_local_client(name + 6,
++//                 ANDROID_SOCKET_NAMESPACE_RESERVED, SOCK_STREAM);
++//     } else if(!strncmp(name, "localreserved:", 14)) {
++//         ret = socket_local_client(name + 14,
++//                 ANDROID_SOCKET_NAMESPACE_RESERVED, SOCK_STREAM);
++//     } else if(!strncmp(name, "localabstract:", 14)) {
++//         ret = socket_local_client(name + 14,
++//                 ANDROID_SOCKET_NAMESPACE_ABSTRACT, SOCK_STREAM);
++//     } else if(!strncmp(name, "localfilesystem:", 16)) {
++//         ret = socket_local_client(name + 16,
++//                 ANDROID_SOCKET_NAMESPACE_FILESYSTEM, SOCK_STREAM);
++// #endif
+     } else if(!strncmp(name, "sync:", 5)) {
+         ret = create_service_thread(file_sync_service, NULL);
+-    } else if(!strncmp(name, "remount:", 8)) {
+-        ret = create_service_thread(remount_service, NULL);
+-    } else if(!strncmp(name, "reboot:", 7)) {
+-        void* arg = strdup(name + 7);
+-        if(arg == 0) return -1;
+-        ret = create_service_thread(reboot_service, arg);
+-    } else if(!strncmp(name, "root:", 5)) {
+-        ret = create_service_thread(restart_root_service, NULL);
+-    } else if(!strncmp(name, "backup:", 7)) {
+-        char* arg = strdup(name+7);
+-        if (arg == NULL) return -1;
+-        ret = backup_service(BACKUP, arg);
+-    } else if(!strncmp(name, "restore:", 8)) {
+-        ret = backup_service(RESTORE, NULL);
+-    } else if(!strncmp(name, "tcpip:", 6)) {
+-        int port;
+-        if (sscanf(name + 6, "%d", &port) == 0) {
+-            port = 0;
+-        }
+-        ret = create_service_thread(restart_tcp_service, (void *)port);
+-    } else if(!strncmp(name, "usb:", 4)) {
+-        ret = create_service_thread(restart_usb_service, NULL);
+-#endif
+ #if 0
+     } else if(!strncmp(name, "echo:", 5)){
+         ret = create_service_thread(echo_service, 0);
+diff --git a/libcutils/Makefile b/libcutils/Makefile
+index f0c335e..c93efe4 100644
+--- a/libcutils/Makefile
++++ b/libcutils/Makefile
+@@ -54,7 +54,7 @@ LOCAL_CFLAGS += $(targetSmpFlag)
+ ################################
+ 
+ OBJS = $(LOCAL_SRC_FILES:.c=.o)
+-CFLAGS = -marm $(LOCAL_CFLAGS) -I../include -I. -DHAVE_PTHREADS=1
++CFLAGS = $(LOCAL_CFLAGS) -I../include -I. -DHAVE_PTHREADS=1
+ 
+ %.o: %.c
+ 	gcc -g -c -fPIC $(CFLAGS) $(LFLAGS) $< -o $@
